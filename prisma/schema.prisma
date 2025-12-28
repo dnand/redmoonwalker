@@ -1,0 +1,279 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // For local development, you can use SQLite instead:
+  // provider = "sqlite"
+  // url      = "file:./dev.db"
+}
+
+enum ProductType {
+  PATTERN
+  MATERIAL
+  GUIDE
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum StepBlockType {
+  TEXT
+  IMAGE
+  VIDEO_EMBED
+  CHECKLIST
+  DOWNLOAD
+  TIP
+  WARNING
+  DIVIDER
+}
+
+enum AssetOwnerType {
+  PRODUCT
+  COURSE
+  STEP
+}
+
+enum AssetKind {
+  IMAGE
+  FILE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders       Order[]
+  entitlements Entitlement[]
+  progress     Progress[]
+
+  @@map("users")
+}
+
+model Product {
+  id           String         @id @default(uuid())
+  type         ProductType
+  title        String
+  slug         String         @unique
+  description  String?        @db.Text
+  priceCents   Int
+  currency     String         @default("usd")
+  status       ProductStatus  @default(DRAFT)
+  coverImageUrl String?
+  gallery      String[]       @default([])
+  metadata     Json?          @default("{}")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  variants     ProductVariant[]
+  orderItems   OrderItem[]
+  entitlements Entitlement[]
+  course       Course?
+
+  @@index([type, status])
+  @@index([slug])
+  @@map("products")
+}
+
+model ProductVariant {
+  id          String     @id @default(uuid())
+  productId   String
+  title       String
+  skillLevel  SkillLevel?
+  sku         String?
+  priceCents  Int?       // Optional override
+  metadata    Json?      @default("{}")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+  entitlements Entitlement[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model Order {
+  id                     String      @id @default(uuid())
+  userId                 String
+  stripeCheckoutSessionId String?   @unique
+  stripePaymentIntentId  String?     @unique
+  totalCents             Int
+  status                 OrderStatus @default(PENDING)
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items      OrderItem[]
+
+  @@index([userId])
+  @@index([stripeCheckoutSessionId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String   @id @default(uuid())
+  orderId         String
+  productId       String
+  variantId       String?
+  quantity        Int      @default(1)
+  unitPriceCents  Int
+  createdAt       DateTime @default(now())
+
+  order    Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product  Product        @relation(fields: [productId], references: [id])
+  variant  ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model Entitlement {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  variantId String?
+  createdAt DateTime @default(now())
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId, variantId])
+  @@index([userId])
+  @@index([productId])
+  @@map("entitlements")
+}
+
+model Course {
+  id          String       @id @default(uuid())
+  productId   String?      @unique
+  title       String
+  slug        String       @unique
+  description String?      @db.Text
+  status      CourseStatus @default(DRAFT)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  product  Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  modules  Module[]
+  progress Progress[]
+
+  @@index([slug])
+  @@index([productId])
+  @@map("courses")
+}
+
+model Module {
+  id        String   @id @default(uuid())
+  courseId  String
+  title     String
+  position  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  steps  Step[]
+
+  @@index([courseId, position])
+  @@map("modules")
+}
+
+model Step {
+  id              String   @id @default(uuid())
+  moduleId        String
+  title           String
+  position        Int
+  estimatedMinutes Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  module    Module      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  blocks    StepBlock[]
+  progress  Progress[]
+
+  @@index([moduleId, position])
+  @@map("steps")
+}
+
+model StepBlock {
+  id        String        @id @default(uuid())
+  stepId    String
+  type      StepBlockType
+  payload   Json          @default("{}")
+  position  Int
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  step Step @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@index([stepId, position])
+  @@map("step_blocks")
+}
+
+model Progress {
+  id            String    @id @default(uuid())
+  userId        String
+  courseId      String
+  stepId        String?
+  completedAt   DateTime?
+  lastViewedAt  DateTime  @default(now())
+  percentComplete Int?    @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  step   Step?   @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId, stepId])
+  @@index([userId, courseId])
+  @@map("progress")
+}
+
+model Asset {
+  id        String         @id @default(uuid())
+  ownerType AssetOwnerType
+  ownerId   String
+  kind      AssetKind
+  url       String
+  fileName  String?
+  fileSize  Int?
+  version   Int?           @default(1)
+  createdAt DateTime       @default(now())
+
+  @@index([ownerType, ownerId])
+  @@map("assets")
+}
+
