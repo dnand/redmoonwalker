@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ShoppingCart, User, BookOpen, Search, Heart } from "lucide-react"
+import { ShoppingCart, User, BookOpen, Search, Heart, Settings } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
@@ -138,6 +138,11 @@ export function Navbar() {
                 <Link href="/account">
                   <Button variant="ghost" size="icon">
                     <User className="h-5 w-5" />
+                  </Button>
+                </Link>
+                <Link href="/admin">
+                  <Button variant="ghost" size="icon" title="Admin">
+                    <Settings className="h-5 w-5" />
                   </Button>
                 </Link>
                 <Button variant="outline" onClick={handleSignOut}>
